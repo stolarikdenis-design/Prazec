@@ -1,0 +1,108 @@
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg width="36" height="36" viewBox="0 0 40 40" aria-hidden="true">
+        <rect x="4" y="6" width="32" height="28" rx="4" fill="var(--surface-2)" stroke="var(--line)"/>
+        <g stroke="var(--fret)" stroke-width="2"><line x1="4" y1="15" x2="36" y2="15"/><line x1="4" y1="24" x2="36" y2="24"/></g>
+        <g stroke="var(--string)" stroke-width="1.2"><line x1="10" y1="6" x2="10" y2="34"/><line x1="16" y1="6" x2="16" y2="34"/><line x1="22" y1="6" x2="22" y2="34"/><line x1="28" y1="6" x2="28" y2="34"/></g>
+        <circle cx="22" cy="19.5" r="3.6" fill="var(--accent)"/>
+      </svg>
+      <h1>Pražec</h1>
+    </div>
+    <p class="save-note" id="saveNote">Načítám…</p>
+  </header>
+</div>
+<nav class="tabs" aria-label="Sekce">
+  <a href="#ladicka" data-v="ladicka"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 16a8 8 0 0 1 16 0"/><path d="M12 16l4-6"/><circle cx="12" cy="16" r="1.5" fill="currentColor"/></svg>Ladička</a>
+  <a href="#akordy" data-v="akordy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M5 9h14M5 15h14M10 3v18M14 3v18"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/></svg>Akordy</a>
+  <a href="#pisnicky" data-v="pisnicky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>Písničky</a>
+  <a href="#cviceni" data-v="cviceni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 21h8l-1.5-17h-5z"/><path d="M12 15l4-8"/></svg>Cvičení</a>
+  <a href="#pokrok" data-v="pokrok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Pokrok</a>
+</nav>
+<main class="wrap">
+
+  <section class="view" id="v-ladicka">
+    <div class="row between">
+      <h2>Ladička</h2>
+      <label for="tuning" class="inline" style="gap:6px"><span class="muted small-t">Ladění</span><select id="tuning"></select></label>
+    </div>
+    <div class="tuner">
+      <div class="meter">
+        <svg viewBox="0 0 300 170" role="img" aria-label="Ukazatel ladění">
+          <g id="ticks"></g>
+          <rect x="140" y="20" width="20" height="8" rx="2" fill="var(--lv3)" opacity=".8"/>
+          <line id="needle" x1="150" y1="150" x2="150" y2="34" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" style="transform-origin:150px 150px;transition:transform .12s"/>
+          <circle cx="150" cy="150" r="7" fill="var(--accent)"/>
+          <text x="22" y="166" font-size="11" fill="var(--muted)">−50</text>
+          <text x="258" y="166" font-size="11" fill="var(--muted)">+50</text>
+        </svg>
+        <div class="note-big" id="tNote">–</div>
+        <div class="hint" id="tHint"></div>
+        <div class="cents" id="tInfo">Zapni mikrofon a brnkni na strunu</div>
+        <div class="row" style="justify-content:center">
+          <button class="btn primary" id="micBtn" type="button">Zapnout mikrofon</button>
+          <label class="inline" for="loopTone"><input type="checkbox" id="loopTone"> Opakovat tón</label>
+        </div>
+        <p class="notice" id="micMsg" hidden></p>
+      </div>
+      <div class="headstock" id="strings"></div>
+    </div>
+  </section>
+
+  <section class="view" id="v-akordy" hidden>
+    <div class="row between">
+      <h2>Akordy</h2>
+      <input id="chordSearch" type="search" placeholder="Hledat, třeba C#m nebo G7" aria-label="Hledat akord" style="flex:1 1 180px;max-width:260px">
+    </div>
+    <div class="chips" id="chordFilters"></div>
+    <div class="legend">
+      <span><i style="background:var(--lv0)"></i>✕ Neumím</span><span><i style="background:var(--lv1)"></i>~ Učím se</span>
+      <span><i style="background:var(--lv2)"></i>✓ Jde to</span><span><i style="background:var(--lv3)"></i>★ Sedí</span>
+    </div>
+    <div class="grid" id="chordGrid"></div>
+  </section>
+
+  <section class="view" id="v-pisnicky" hidden>
+    <div class="songs" id="songsWrap">
+      <div class="song-col">
+        <div class="row between"><h2>Písničky</h2>
+          <div class="row"><button class="btn small primary" id="importSong" type="button">Z webu</button><button class="btn small" id="newSong" type="button">Napsat</button></div></div>
+        <input id="songSearch" type="search" placeholder="Hledat písničku" aria-label="Hledat písničku">
+        <div class="song-list" id="songList"></div>
+      </div>
+      <div class="pane-col" id="songPane"></div>
+    </div>
+  </section>
+
+  <section class="view" id="v-cviceni" hidden>
+    <h2>Cvičení</h2>
+    <div class="sub" role="group" aria-label="Druh cvičení">
+      <button type="button" data-mode="drill">Akordy</button>
+      <button type="button" data-mode="pair">Přechody</button>
+      <button type="button" data-mode="metro">Metronom a rytmus</button>
+    </div>
+    <div id="practicePane"></div>
+  </section>
+
+  <section class="view" id="v-pokrok" hidden>
+    <h2>Pokrok</h2>
+    <div class="stats" id="stats"></div>
+    <div style="display:grid;gap:8px"><h3>Akordy podle toho, jak ti jdou</h3><div class="bar" id="lvBar"></div><div class="legend" id="lvLegend"></div></div>
+    <div style="display:grid;gap:8px"><h3>Posledních 14 dní</h3><div class="days" id="days"></div><div class="days-l"><span id="dFrom"></span><span>dnes</span></div></div>
+    <div style="display:grid;gap:8px"><h3>Na co se zaměřit</h3>
+      <div class="tbl"><table><thead><tr><th>Akord</th><th>Jak jde</th><th>Čistě</th><th>Naposledy</th></tr></thead><tbody id="focus"></tbody></table></div></div>
+    <div style="display:grid;gap:8px" id="pairsBox"></div>
+    <div class="panel">
+      <h3>Nastavení</h3>
+      <label class="inline" for="optLefty"><input type="checkbox" id="optLefty"> Hraju levou rukou (zrcadlit hmatníky)</label>
+      <label class="inline" for="optWake"><input type="checkbox" id="optWake"> Nezhasínat displej u písničky</label>
+      <div class="row">
+        <button class="btn small" id="exportBtn" type="button">Stáhnout zálohu</button>
+        <label class="btn small" for="importFile" style="display:inline-flex;color:var(--fg);font-size:.875rem">Nahrát zálohu<input id="importFile" type="file" accept="application/json,.json" hidden></label>
+        <button class="btn small ghost" id="installBtn" type="button" hidden>Nainstalovat do telefonu</button>
+      </div>
+      <p class="muted small-t" id="storeInfo"></p>
+    </div>
+  </section>
+</main>
+<div id="layer"></div>
