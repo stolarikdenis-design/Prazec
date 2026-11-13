@@ -77,6 +77,8 @@ section.view{display:grid;gap:18px;padding-top:6px}
 .sub button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.2)}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--surface-2);padding:8px 14px;border-radius:9px;font-weight:700;min-height:44px}
+a.btn{color:inherit;text-decoration:none}
+a.btn.primary{color:var(--accent-ink)}
 .btn:hover{border-color:var(--accent)}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn.ghost{background:transparent}
@@ -813,6 +815,8 @@ function renderSongs(){
     <div class="sheet-head"><div style="min-width:0"><h2>${esc(s.title||"Bez názvu")}</h2><p class="muted">${esc(s.artist||"")}</p></div>
       <div class="row"><button class="btn small" type="button" data-status>${s.status==="umim"?"✓ Umím":"Označit, že umím"}</button>
       <button class="btn small ghost" type="button" data-edit>Upravit</button></div></div>
+    <div class="row">${s.tidal?`<a class="btn small primary" href="${esc(s.tidal)}" target="_blank" rel="noopener">▶ Poslechnout na Tidalu</a><button class="btn small ghost" type="button" data-tidal-set>Změnit odkaz</button>`
+      :`<a class="btn small" href="${esc(tidalSearch(s))}" target="_blank" rel="noopener">Najít na Tidalu</a><button class="btn small ghost" type="button" data-tidal-set>Vložit odkaz z Tidalu</button>`}</div>
     <div class="toolbar">
       <div class="grp" aria-label="Tónina"><button type="button" data-tr="-1" aria-label="O půltón níž">−</button><span>tónina ${trans?(trans>0?"+":"")+trans:"původní"}</span><button type="button" data-tr="1" aria-label="O půltón výš">+</button></div>
       <div class="grp" aria-label="Kapodastr"><button type="button" data-capo="-1" aria-label="Kapodastr níž">−</button><span>kapo ${capo||"bez"}</span><button type="button" data-capo="1" aria-label="Kapodastr výš">+</button></div>
@@ -831,6 +835,7 @@ function editor(s){return `<form class="sheet" id="songForm" style="gap:12px"><h
   <label for="fArtist">Interpret<input id="fArtist" value="${esc(s.artist)}"></label>
   <label for="fCapo">Kapodastr<input id="fCapo" type="number" inputmode="numeric" min="0" max="12" value="${+s.capo||0}"></label>
   <label for="fStatus">Stav<select id="fStatus"><option value="ucim"${s.status!=="umim"?" selected":""}>Učím se</option><option value="umim"${s.status==="umim"?" selected":""}>Umím</option></select></label></div>
+  <label for="fTidal">Odkaz na Tidal (nepovinné)<input id="fTidal" type="url" inputmode="url" placeholder="https://tidal.com/browse/track/…" value="${esc(s.tidal||"")}"></label>
   <label for="fText">Text s akordy<textarea id="fText" placeholder="{1. sloka}&#10;[Am]Ráno když [C]vstanu&#10;[G]čaj si [Em]uvařím">${esc(s.text)}</textarea></label>
   <p class="muted small-t">Akord dej do [hranatých závorek] před slabiku, kde se mění. Nadpis části do {složených}. Můžeš sem vložit i text, kde jsou akordy na řádku nad slovy, a klepnout na Převést.</p>
   <div class="row"><button class="btn primary" type="submit">Uložit</button><button class="btn" type="button" data-convert>Převést akordy nad textem</button><button class="btn ghost" type="button" data-cancel>Zrušit</button></div></form>`}
@@ -838,8 +843,10 @@ function bindEditor(){
   const f=$("songForm");
   f.querySelector("[data-convert]").onclick=()=>{const r=M.importText(f.fText.value,{title:f.fTitle.value||"-"});f.fText.value=r.text;toast(`Převedeno, ${r.chords.length} různých akordů`)};
   f.onsubmit=e=>{e.preventDefault();
+    const tv=f.fTidal.value.trim(),tl=tv?tidalLink(tv):"";
+    if(tv&&!tl){toast("Tohle není odkaz na Tidal. V Tidalu dej Sdílet → Kopírovat odkaz.");f.fTidal.focus();return}
     const old=editing==="new"?{}:docs.get(editing),id=editing==="new"?"song-"+Date.now().toString(36):editing;
-    put(id,{...old,kind:"song",title:f.fTitle.value.trim(),artist:f.fArtist.value.trim(),capo:+f.fCapo.value||0,status:f.fStatus.value,text:f.fText.value,example:false,created:old.created||Date.now()});
+    put(id,{...old,kind:"song",title:f.fTitle.value.trim(),artist:f.fArtist.value.trim(),capo:+f.fCapo.value||0,status:f.fStatus.value,text:f.fText.value,tidal:tl,example:false,created:old.created||Date.now()});
     editing=null;openSong(id)};
 }
 $("songSearch").oninput=e=>{sq=e.target.value;render()};
@@ -851,6 +858,7 @@ $("v-pisnicky").addEventListener("click",e=>{
   if(t.closest("[data-back]")){sel=null;stopScroll();releaseWake();$("songsWrap").classList.remove("reading");render();return}
   if(t.closest("[data-cancel]")){editing=null;if(!sel) $("songsWrap").classList.remove("reading");render();return}
   if(t.closest("[data-edit]")){editing=sel;stopScroll();render();return}
+  if(t.closest("[data-tidal-set]")){tidalSheet(sel);return}
   const tr=t.closest("[data-tr]");if(tr){trans=Math.max(-11,Math.min(11,trans+ +tr.dataset.tr));render();return}
   const cp=t.closest("[data-capo]");if(cp){capo=Math.max(0,Math.min(9,capo+ +cp.dataset.capo));render();return}
   const cs=t.closest("[data-capo-set]");if(cs){capo=+cs.dataset.capoSet;render();toast(`Kapodastr na ${capo}. pražec`);return}
@@ -932,6 +940,7 @@ function importSheet(pre){
 function setITab(t){imp.tab=t;document.querySelectorAll("[data-itab]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.itab===t)));$("iUrlBox").hidden=t!=="url";$("iTextBox").hidden=t!=="text"}
 async function doFetch(){
   const url=$("iUrl").value.trim();if(!/^https?:\/\//i.test(url)){$("iResult").innerHTML=`<p class="notice">Vlož celý odkaz začínající https://</p>`;return}
+  if(tidalLink(url)){$("iResult").innerHTML=`<p class="notice">Tohle je odkaz na Tidal, akordy z něj nenačtu. Najdi akordy na webu se zpěvníkem. Odkaz z Tidalu pak ulož u písničky tlačítkem Vložit odkaz z Tidalu.</p>`;return}
   imp.source=url;$("iResult").innerHTML=`<p class="muted">Načítám stránku…</p>`;
   try{const html=await fetchUrl(url);if(!imp) return;
     imp.raw=html;imp.isHtml=/<html|<body|<div/i.test(html);showResult(imp.isHtml?htmlToSong(html,url):M.importText(html))}
@@ -1139,8 +1148,34 @@ function shareParams(){
   history.replaceState(null,"",location.pathname+"#pisnicky");
   return {url,text:url?"":text.trim()};
 }
+/* Tidal */
+function tidalLink(u){try{const x=new URL(String(u).trim());if(!/(^|\.)tidal\.com$/i.test(x.hostname)) return null;
+  for(const k of ["track","video","album","playlist","mix"]){const m=new RegExp("/"+k+"/([\\w-]+)").exec(x.pathname);if(m) return `https://tidal.com/browse/${k}/${m[1]}`}return null}catch(e){return null}}
+function tidalSearch(s){return "https://listen.tidal.com/search?q="+encodeURIComponent([s.artist,s.title].filter(Boolean).join(" ")||"")}
+function tidalSheet(songId){
+  const s=docs.get(songId);
+  openSheet(`<h3>Odkaz na Tidal</h3><p class="muted small-t">V aplikaci Tidal otevři skladbu, dej Sdílet → Kopírovat odkaz a vlož ho sem.</p>
+    <label for="tLink">Odkaz na skladbu<input id="tLink" type="url" inputmode="url" placeholder="https://tidal.com/browse/track/…" value="${esc(s&&s.tidal||"")}"></label>
+    <p class="notice" id="tErr" hidden>Tohle není odkaz na skladbu z Tidalu.</p>
+    <div class="row"><button class="btn primary" type="button" data-tsave="${esc(songId)}">Uložit</button>${s&&s.tidal?`<button class="btn ghost danger" type="button" data-tdel="${esc(songId)}">Odebrat odkaz</button>`:""}<button class="btn ghost" type="button" data-close>Zrušit</button></div>`);
+}
+function tidalPickSheet(link){
+  const list=songs();
+  openSheet(`<h3>Ke které písničce patří?</h3><p class="muted small-t">Odkaz z Tidalu uložím k písničce a příště ji pustíš jedním klepnutím.</p>
+    ${list.length?`<div class="song-list">${list.map(s=>`<button type="button" class="song-item" data-tpick="${esc(s.id)}"><b>${esc(s.title||"Bez názvu")}</b><small>${esc(s.artist||"")}${s.tidal?" · už má odkaz":""}</small></button>`).join("")}</div>`
+      :`<p class="notice">Zatím nemáš žádnou písničku. Nejdřív přidej akordy a pak odkaz nasdílej znovu.</p>`}
+    <button class="btn ghost" type="button" data-close>Zrušit</button>`);
+  $("layer").dataset.tidal=link;
+}
+$("layer").addEventListener("click",e=>{
+  const t=e.target;
+  const sv=t.closest("[data-tsave]");if(sv){const l=tidalLink($("tLink").value);if(!l){$("tErr").hidden=false;return}
+    const id=sv.dataset.tsave;put(id,{...docs.get(id),tidal:l});closeSheet();toast("Odkaz na Tidal uložený");return}
+  const dl=t.closest("[data-tdel]");if(dl){const id=dl.dataset.tdel,s={...docs.get(id)};delete s.tidal;put(id,s);closeSheet();toast("Odkaz odebraný");return}
+  const pk=t.closest("[data-tpick]");if(pk){const id=pk.dataset.tpick;put(id,{...docs.get(id),tidal:$("layer").dataset.tidal});closeSheet();openSong(id);toast("Odkaz na Tidal uložený")}
+});
 renderStrings();route();initStore();
-const sp=shareParams();if(sp){location.hash="#pisnicky";route();importSheet(sp)}
+const sp=shareParams();if(sp){location.hash="#pisnicky";route();const tl=sp.url&&tidalLink(sp.url);if(tl) tidalPickSheet(tl);else importSheet(sp)}
 })();
 </script>
 <script>if("serviceWorker" in navigator&&location.protocol==="https:") navigator.serviceWorker.register("sw.js");</script>
