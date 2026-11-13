@@ -23,3 +23,5 @@ Ref: Na kopci stál
 Em       H7
 dům a v něm`;console.log(M.importText(cz2));
 console.log("OK");
+a.equal(M.importText("Tempo: 96\n  Am\nText").bpm,96);a.equal(M.importText("120 BPM\nC\nText").bpm,120);a.equal(M.importText("C\nText").bpm,null);
+console.log("tempo z importu OK");

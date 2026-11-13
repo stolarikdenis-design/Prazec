@@ -122,6 +122,8 @@ function importText(raw,opt){
   let title=opt.title||"",artist=opt.artist||"";
   let t=String(raw||"").replace(/\r\n?/g,"\n").replace(/ /g," ");
   t=t.split("\n").map(l=>{let o="";for(const c of l){if(c==="\t"){o+=" ".repeat(8-o.length%8)}else o+=c}return o}).join("\n");
+  let bpm=null;const bm=/(?:\btempo|\bbpm)\s*[:=]?\s*(\d{2,3})\b|\b(\d{2,3})\s*bpm\b/i.exec(t);
+  if(bm){const v=+(bm[1]||bm[2]);if(v>=40&&v<=240) bpm=v}
   // r.jina.ai hlavička
   const jt=/^Title:\s*(.+)$/m.exec(t); if(jt&&!title) title=jt[1].trim();
   t=t.replace(/^(Title|URL Source|Published Time|Markdown Content|Warning):.*$/gm,"");
@@ -173,7 +175,7 @@ function importText(raw,opt){
   let text=out.join("\n").replace(/\n{3,}/g,"\n\n").replace(/^\n+|\n+$/g,"");
   // odstraň běžné ocásky webu
   text=text.replace(/\n.*(©|copyright|všechna práva|all rights).*$/gim,"");
-  return {title,artist,text,english,chords:chordsIn(text)};
+  return {title,artist,text,english,bpm,chords:chordsIn(text)};
 }
 
 return {NOTES,STD,TUNINGS,LEVELS,CHORDS,CATS,ALIAS,DICT,parseChord,isChord,normName,getChord,difficulty,transpose,midiFreq,midiName,chordsIn,chordTokens,importText};

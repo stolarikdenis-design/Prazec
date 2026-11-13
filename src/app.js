@@ -273,7 +273,7 @@ function renderSongs(){
   const all=songs(),list=sq?all.filter(s=>(s.title+" "+s.artist).toLowerCase().includes(sq.toLowerCase())):all;
   if(sel&&!docs.has(sel)) sel=null;
   $("songList").innerHTML=list.length?list.map(s=>`<button type="button" class="song-item" data-song="${esc(s.id)}" aria-current="${s.id===sel}">
-    <b>${esc(s.title||"Bez názvu")}</b><small>${esc(s.artist||"")}${s.artist?" · ":""}${M.chordsIn(s.text).length} akordů</small>
+    <b>${esc(s.title||"Bez názvu")}</b><small>${esc(s.artist||"")}${s.artist?" · ":""}${M.chordsIn(s.text).length} akordů${s.bpm?` · ♩ ${Math.round(s.bpm)}`:""}</small>
     <span>${s.example?'<span class="tag ex">Ukázka</span> ':""}<span class="tag ${s.status==="umim"?"done":""}">${s.status==="umim"?"Umím":"Učím se"}</span></span></button>`).join("")
     :all.length?`<p class="muted">Nic takového nemáš.</p>`:`<div class="empty"><b>Zatím tu nic není</b><span>Najdi písničku s akordy na webu a přidej ji tlačítkem Z webu.</span></div>`;
   const P=$("songPane");
@@ -288,6 +288,7 @@ function renderSongs(){
       <button class="btn small ghost" type="button" data-edit>Upravit</button></div></div>
     <div class="row">${s.tidal?`<a class="btn small primary" href="${esc(s.tidal)}" target="_blank" rel="noopener">▶ Poslechnout na Tidalu</a><button class="btn small ghost" type="button" data-tidal-set>Změnit odkaz</button>`
       :`<a class="btn small" href="${esc(tidalSearch(s))}" target="_blank" rel="noopener">Najít na Tidalu</a><button class="btn small ghost" type="button" data-tidal-set>Vložit odkaz z Tidalu</button>`}</div>
+    <div class="row"><button class="btn small" type="button" data-tempo>${s.bpm?`♩ ${Math.round(s.bpm)} BPM`:"♩ Zjistit tempo"}</button>${s.bpm?`<button class="btn small ghost" type="button" data-tempo-play>Hrát s metronomem</button>`:""}</div>
     <div class="toolbar">
       <div class="grp" aria-label="Tónina"><button type="button" data-tr="-1" aria-label="O půltón níž">−</button><span>tónina ${trans?(trans>0?"+":"")+trans:"původní"}</span><button type="button" data-tr="1" aria-label="O půltón výš">+</button></div>
       <div class="grp" aria-label="Kapodastr"><button type="button" data-capo="-1" aria-label="Kapodastr níž">−</button><span>kapo ${capo||"bez"}</span><button type="button" data-capo="1" aria-label="Kapodastr výš">+</button></div>
@@ -330,6 +331,9 @@ $("v-pisnicky").addEventListener("click",e=>{
   if(t.closest("[data-cancel]")){editing=null;if(!sel) $("songsWrap").classList.remove("reading");render();return}
   if(t.closest("[data-edit]")){editing=sel;stopScroll();render();return}
   if(t.closest("[data-tidal-set]")){tidalSheet(sel);return}
+  if(t.closest("[data-tempo]")){tempoSheet({songId:sel});return}
+  if(t.closest("[data-tempo-play]")){const s=docs.get(sel);prefs.bpm=Math.round(s.bpm);const ch=[...new Set(M.chordsIn(s.text).map(c=>M.transpose(c,trans+(+s.capo||0)-capo)))].slice(0,6);
+    if(ch.length) prefs.prog=ch.join(" ");savePrefs();stopMetro();pmode="metro";location.hash="#cviceni";return}
   const tr=t.closest("[data-tr]");if(tr){trans=Math.max(-11,Math.min(11,trans+ +tr.dataset.tr));render();return}
   const cp=t.closest("[data-capo]");if(cp){capo=Math.max(0,Math.min(9,capo+ +cp.dataset.capo));render();return}
   const cs=t.closest("[data-capo-set]");if(cs){capo=+cs.dataset.capoSet;render();toast(`Kapodastr na ${capo}. pražec`);return}
@@ -423,6 +427,7 @@ function showResult(r){
   if(!n){$("iResult").innerHTML=`<p class="notice">V textu jsem nenašel žádné akordy. Zkontroluj, že jsi zkopíroval i řádky s akordy.</p>`;return}
   $("iResult").innerHTML=`<div style="display:grid;gap:10px">
     <p><b>Našel jsem ${n} ${n===1?"akord":n<5?"akordy":"akordů"}:</b> ${r.chords.map(esc).join(", ")}</p>
+    ${r.bpm?`<p>Tempo ze stránky: <b>${r.bpm} BPM</b></p>`:""}
     <label class="inline" for="iEng"><input type="checkbox" id="iEng"${r.english?" checked":""}> Akordy jsou v anglickém značení (B převést na H)</label>
     <div class="fields" style="grid-template-columns:1fr 1fr"><label for="iTitle">Název<input id="iTitle" value="${esc(r.title)}"></label><label for="iArtist">Interpret<input id="iArtist" value="${esc(r.artist)}"></label></div>
     <div class="preview lyrics">${renderLyrics(r.text,0)}</div>
@@ -434,7 +439,7 @@ $("layer").addEventListener("click",e=>{
   if(t.closest("[data-ifetch]")){doFetch();return}
   if(t.closest("[data-iparse]")){imp.english=null;parseText();return}
   if(t.closest("[data-isave],[data-iedit]")){const r=imp.result,id="song-"+Date.now().toString(36),ed=!!t.closest("[data-iedit]");
-    put(id,{kind:"song",title:$("iTitle").value.trim()||"Bez názvu",artist:$("iArtist").value.trim(),capo:0,status:"ucim",text:r.text,source:imp.source||"",created:Date.now()});
+    put(id,{kind:"song",title:$("iTitle").value.trim()||"Bez názvu",artist:$("iArtist").value.trim(),capo:0,status:"ucim",text:r.text,bpm:r.bpm||null,source:imp.source||"",created:Date.now()});
     logActivity();closeSheet();location.hash="#pisnicky";openSong(id);if(ed){editing=id;render()}toast("Písnička uložená");}
 });
 $("layer").addEventListener("change",e=>{if(!imp||e.target.id!=="iEng") return;imp.english=e.target.checked;
@@ -546,6 +551,7 @@ function renderMetro(P){
     <div class="panel"><label class="inline" for="mPlay"><input type="checkbox" id="mPlay"> Hrát se mnou akordy (jeden akord na takt)</label>
       <label for="mProg">Sled akordů<input id="mProg" value="${esc(prefs.prog)}" placeholder="G D Em C"></label>
       <div class="row between"><span style="font-family:var(--f-display);font-size:2.2rem;font-weight:800" id="mCur">${esc(prog[0]||"")}</span><span class="muted" id="mNext">${prog[1]?"další "+esc(prog[1]):""}</span></div></div>
+    <button class="btn small ghost" type="button" id="mDetect" style="justify-self:center">Nevíš tempo? Zjisti ho poslechem písničky</button>
     <button class="btn primary wide" type="button" id="mGo">${met?"Zastavit":"Spustit"}</button></div>`;
   const setB=v=>{prefs.bpm=Math.max(40,Math.min(200,Math.round(v)));savePrefs();$("mBpm").textContent=prefs.bpm;$("mRange").value=prefs.bpm};
   $("mRange").oninput=e=>setB(+e.target.value);
@@ -553,6 +559,7 @@ function renderMetro(P){
   $("mTap").onclick=()=>{const t=performance.now();taps=taps.filter(x=>t-x<2500);taps.push(t);if(taps.length>=3){const iv=(taps[taps.length-1]-taps[0])/(taps.length-1);setB(60000/iv)}};
   $("mPat").onchange=e=>{prefs.pattern=e.target.value;savePrefs();const r=!!met;stopMetro();render();if(r){startMetro();$("mGo").textContent="Zastavit"}};
   $("mProg").onchange=e=>{prefs.prog=e.target.value;savePrefs();const l=progList();$("mCur").textContent=l[0]||"";$("mNext").textContent=l[1]?"další "+l[1]:""};
+  $("mDetect").onclick=()=>tempoSheet({bpm:prefs.bpm,onApply:v=>{setB(v);toast(`Metronom nastavený na ${Math.round(v)} BPM`)}});
   $("mGo").onclick=()=>{if(met){stopMetro();flushSec()}else{startMetro();$("mGo").textContent="Zastavit"}};
 }
 function renderPractice(){
@@ -611,6 +618,125 @@ function render(){
   else if(view==="pokrok") renderProgress();
   if(view!=="pisnicky"&&$("scrollFab")) $("scrollFab").hidden=true;
 }
+
+
+/* ---------- tempo ---------- */
+let tp=null;
+function median(a){const b=a.slice().sort((x,y)=>x-y);return b.length?b[b.length>>1]:0}
+function foldTo(v,ref){while(v>ref*1.41) v/=2;while(v<ref/1.41) v*=2;return v}
+function tempoSheet(o){
+  stopTempoWork();
+  const s=o.songId?docs.get(o.songId):null;
+  tp={...o,bpm:o.bpm||(s&&s.bpm)||null,mode:"listen",taps:[],ests:[],clickOn:false};
+  openSheet(`<h3>Tempo${s?": "+esc(s.title):""}</h3>
+    <p class="muted small-t">Tempo je počet dob za minutu (BPM). Doba je místo, kde bys při poslechu přirozeně dupal nohou.</p>
+    <div class="bpm"><b id="tpBpm">${tp.bpm?Math.round(tp.bpm):"–"}</b><span class="muted">BPM</span></div>
+    <p class="muted small-t" id="tpState" style="text-align:center;min-height:1.4em"></p>
+    <div class="sub" role="group" aria-label="Jak zjistit tempo"><button type="button" data-tpm="listen">Poslechem</button><button type="button" data-tpm="tap">Ťukáním</button><button type="button" data-tpm="file">Ze souboru</button></div>
+    <div id="tpListen" style="display:grid;gap:8px">
+      <p class="small-t">Pusť písničku nahlas, třeba z počítače nebo reproduktoru, a drž telefon poblíž. Za 10 až 20 sekund tu bude tempo. Nejlépe funguje část, kde hrají bicí nebo výrazný rytmus.</p>
+      <div class="bar" aria-hidden="true"><i id="tpLevel" style="width:0%;background:var(--accent)"></i></div>
+      <button class="btn primary" type="button" id="tpListenBtn">Začít poslouchat</button>
+    </div>
+    <div id="tpTap" style="display:grid;gap:8px" hidden>
+      <p class="small-t">Pusť si písničku a ťukej na každou dobu aspoň 8krát. Když přestaneš na 3 sekundy, počítá se znovu.</p>
+      <button class="big-tap" type="button" id="tpTapBtn"><b id="tpTapN">0</b>ťukni na dobu</button>
+    </div>
+    <div id="tpFile" style="display:grid;gap:8px" hidden>
+      <p class="small-t">Vyber nahrávku písničky v telefonu (MP3, M4A, WAV). Skladby z Tidalu jsou chráněné a takhle načíst nejdou.</p>
+      <label class="btn" for="tpFileIn" style="color:var(--fg);font-size:1rem">Vybrat soubor<input id="tpFileIn" type="file" accept="audio/*" hidden></label>
+    </div>
+    <div class="panel" id="tpCheck"${tp.bpm?"":" hidden"}>
+      <p class="small-t"><b>Ověř si to:</b> pusť písničku a k ní klik. Když klik utíká dopředu nebo zaostává, uprav o 1. Když klik zní dvakrát častěji nebo dvakrát pomaleji než doby, použij ½× nebo 2×.</p>
+      <div class="row" style="justify-content:center"><button class="btn small" type="button" data-tpadj="half">½×</button><button class="btn small" type="button" data-tpadj="-1">−1</button>
+        <button class="btn small primary" type="button" id="tpClick">▶ Klik</button><button class="btn small" type="button" data-tpadj="1">+1</button><button class="btn small" type="button" data-tpadj="double">2×</button></div>
+    </div>
+    <div class="row"><button class="btn primary" type="button" id="tpSave"${tp.bpm?"":" disabled"}>${o.songId?"Uložit k písničce":o.onApply?"Použít v metronomu":"Hotovo"}</button><button class="btn ghost" type="button" data-close>Zavřít</button></div>`,stopTempoWork);
+  setTpMode("listen");
+}
+function setTpMode(m){if(!tp) return;if(m!=="listen") stopListen();tp.mode=m;
+  document.querySelectorAll("[data-tpm]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.tpm===m)));
+  $("tpListen").hidden=m!=="listen";$("tpTap").hidden=m!=="tap";$("tpFile").hidden=m!=="file";}
+function setTpBpm(v,state){if(!tp) return;tp.bpm=Math.max(30,Math.min(250,v));$("tpBpm").textContent=Math.round(tp.bpm);$("tpCheck").hidden=false;$("tpSave").disabled=false;
+  if(state!=null) $("tpState").textContent=state;if(tp.clickOn) restartClick()}
+function tpState(t){if(tp&&$("tpState")) $("tpState").textContent=t}
+/* poslech mikrofonem */
+let lis=null;
+async function startListen(){
+  stopMic();stopClick();
+  try{
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) throw new Error("none");
+    const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:true}});
+    if(!tp){stream.getTracks().forEach(t=>t.stop());return}
+    const a=ctx(),src=a.createMediaStreamSource(stream),sp=a.createScriptProcessor(2048,1,1),g=a.createGain();g.gain.value=0;
+    const sr=a.sampleRate,len=Math.round(sr*14);
+    lis={stream,src,sp,g,sr,len,ring:new Float32Array(len),w:0,total:0,level:0,t0:performance.now()};
+    sp.onaudioprocess=e=>{if(!lis) return;const d=e.inputBuffer.getChannelData(0);let r=0;for(let i=0;i<d.length;i++){lis.ring[lis.w]=d[i];lis.w=(lis.w+1)%len;r+=d[i]*d[i]}
+      lis.total+=d.length;lis.level=lis.level*0.8+Math.sqrt(r/d.length)*0.2};
+    src.connect(sp);sp.connect(g);g.connect(a.destination);
+    lis.int=setInterval(analyzeListen,1500);lis.lv=setInterval(()=>{const el=$("tpLevel");if(el) el.style.width=Math.min(100,lis.level*400)+"%"},100);
+    tp.ests=[];$("tpListenBtn").textContent="Zastavit";tpState("Poslouchám…");
+  }catch(e){
+    tpState(IS_ARTIFACT?"V náhledu na claude.ai mikrofon nefunguje. Použij nainstalovanou aplikaci nebo ťukání.":"Mikrofon se nepodařilo zapnout. Povol ho v nastavení prohlížeče, nebo zkus ťukání.");
+  }
+}
+function stopListen(){if(!lis) return;clearInterval(lis.int);clearInterval(lis.lv);try{lis.sp.disconnect();lis.src.disconnect();lis.g.disconnect()}catch(e){}
+  lis.stream.getTracks().forEach(t=>t.stop());lis=null;const b=$("tpListenBtn");if(b) b.textContent="Poslouchat znovu"}
+function analyzeListen(){
+  if(!lis||!tp) return;const secs=lis.total/lis.sr;
+  if(lis.level<0.004&&secs>3){tpState("Skoro nic neslyším. Pusť hudbu hlasitěji nebo dej telefon blíž.");return}
+  if(secs<6){tpState(`Poslouchám… ${Math.floor(secs)} s`);return}
+  const n=Math.min(lis.total,lis.len),x=new Float32Array(n);for(let i=0;i<n;i++) x[i]=lis.ring[(lis.w-n+i+lis.len)%lis.len];
+  const r=Tempo.detect(x,lis.sr);
+  if(!r||r.conf<0.15){tpState(`Hledám rytmus… ${Math.floor(secs)} s`);return}
+  tp.ests.push(r.bpm);if(tp.ests.length>6) tp.ests.shift();
+  const ref=median(tp.ests),folded=tp.ests.map(v=>foldTo(v,ref)),m=median(folded);
+  const close=folded.filter(v=>Math.abs(v-m)/m<0.025).length;
+  setTpBpm(m);
+  if(close>=4){tpState(`Hotovo: ${Math.round(m)} BPM. Ověř ho klikem níže.`);stopListen()}
+  else if(secs>45){tpState(`Odhad ${Math.round(m)} BPM, ale písnička nemá výrazný rytmus. Ověř ho klikem nebo zkus ťukání.`);stopListen()}
+  else tpState(`Zatím ${Math.round(m)} BPM, ještě poslouchám pro jistotu…`);
+}
+/* ťukání */
+function tapTempo(){
+  const t=performance.now()/1000,a=tp.taps;if(a.length&&t-a[a.length-1]>3) a.length=0;a.push(t);if(a.length>24) a.shift();
+  $("tpTapN").textContent=a.length;if(navigator.vibrate) navigator.vibrate(5);
+  if(a.length<4){tpState("Ťukej dál…");return}
+  // sklon přímky přes všechna ťuknutí je přesnější než průměr intervalů
+  const n=a.length;let sx=0,sy=0,sxy=0,sxx=0;for(let i=0;i<n;i++){sx+=i;sy+=a[i];sxy+=i*a[i];sxx+=i*i}
+  const slope=(n*sxy-sx*sy)/(n*sxx-sx*sx),iv=[];for(let i=1;i<n;i++) iv.push(a[i]-a[i-1]);
+  const mean=iv.reduce((x,y)=>x+y,0)/iv.length,cv=Math.sqrt(iv.reduce((x,y)=>x+(y-mean)*(y-mean),0)/iv.length)/mean;
+  setTpBpm(60/slope,n<8?"Ještě pár ťuknutí…":cv<0.05?"Ťukáš rovnoměrně, tempo sedí.":cv<0.1?"Docela rovnoměrně. Ještě chvíli pro přesnost.":"Ťukání je nepravidelné. Zkus se soustředit na bicí nebo basu.");
+}
+/* soubor */
+async function tempoFromFile(f){
+  tpState("Načítám a analyzuji nahrávku…");
+  try{const buf=await ctx().decodeAudioData(await f.arrayBuffer());
+    const sr=buf.sampleRate,len=buf.length,st=Math.max(0,Math.floor(len/2-sr*20)),n=Math.min(len-st,sr*40),x=new Float32Array(n);
+    for(let c=0;c<buf.numberOfChannels;c++){const d=buf.getChannelData(c);for(let i=0;i<n;i++) x[i]+=d[st+i]/buf.numberOfChannels}
+    const r=Tempo.detect(x,sr);if(!r||r.conf<0.1){tpState("V nahrávce jsem nenašel jasný rytmus. Zkus ťukání.");return}
+    setTpBpm(r.bpm,`Z nahrávky: ${Math.round(r.bpm)} BPM${r.conf<0.4?" (nejisté, ověř klikem)":""}.`);
+  }catch(e){tpState("Tenhle soubor neumím přečíst. Zkus MP3 nebo M4A.")}
+}
+/* ověřovací klik */
+let clk=null;
+function startClick(){const a=ctx();clk={next:a.currentTime+0.1,n:0};clk.int=setInterval(()=>{if(!tp) return;while(clk.next<a.currentTime+0.12){click(clk.next,clk.n%4===0);clk.next+=60/tp.bpm;clk.n++}},25);
+  tp.clickOn=true;$("tpClick").textContent="❚❚ Klik"}
+function stopClick(){if(clk){clearInterval(clk.int);clk=null}if(tp){tp.clickOn=false;const b=$("tpClick");if(b) b.textContent="▶ Klik"}}
+function restartClick(){if(clk){clearInterval(clk.int);clk=null}startClick()}
+function stopTempoWork(){stopListen();stopClick();tp=null}
+$("layer").addEventListener("click",e=>{
+  if(!tp) return;const t=e.target;
+  const m=t.closest("[data-tpm]");if(m){setTpMode(m.dataset.tpm);return}
+  if(t.closest("#tpListenBtn")){lis?stopListen():startListen();return}
+  if(t.closest("#tpTapBtn")){tapTempo();return}
+  if(t.closest("#tpClick")){tp.clickOn?stopClick():startClick();return}
+  const adj=t.closest("[data-tpadj]");if(adj&&tp.bpm){const v=adj.dataset.tpadj;setTpBpm(v==="half"?tp.bpm/2:v==="double"?tp.bpm*2:Math.round(tp.bpm)+ +v,"");return}
+  if(t.closest("#tpSave")&&tp.bpm){const v=Math.round(tp.bpm),o=tp;
+    if(o.songId){put(o.songId,{...docs.get(o.songId),bpm:v});logActivity()}
+    if(o.onApply) o.onApply(v);closeSheet();if(o.songId) toast(`Tempo ${v} BPM uložené`)}
+});
+$("layer").addEventListener("change",e=>{if(tp&&e.target.id==="tpFileIn"&&e.target.files[0]) tempoFromFile(e.target.files[0])});
 
 /* sdílení do aplikace (Android) */
 function shareParams(){

@@ -1,6 +1,6 @@
 import fs from "fs";
 const r=f=>fs.readFileSync("src/"+f,"utf8");
-const css=r("styles.css"),body=r("body.html"),music=r("music.js"),app=r("app.js");
+const css=r("styles.css"),body=r("body.html"),music=r("music.js")+"\n"+r("tempo.js"),app=r("app.js");
 const fonts='<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap">';
 const version=Date.now().toString(36);
 const html=`<!doctype html>
