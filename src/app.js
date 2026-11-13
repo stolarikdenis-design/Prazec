@@ -9,7 +9,7 @@ const IS_ARTIFACT=!!(window.claude&&window.claude.use);
 
 /* ---------- nastavení zařízení ---------- */
 const PREF_KEY="prazec-prefs";
-let prefs={lefty:false,wake:true,font:1.05,tuning:"standard",bpm:80,pattern:"pop",prog:"G D Em C",scroll:3};
+let prefs={lefty:false,wake:true,font:1.05,tuning:"standard",bpm:80,pattern:"pop",prog:"G D Em C",scroll:3,barsPerChord:1,playStrum:false};
 try{Object.assign(prefs,JSON.parse(localStorage.getItem(PREF_KEY)||"{}"))}catch(e){}
 function savePrefs(){try{localStorage.setItem(PREF_KEY,JSON.stringify(prefs))}catch(e){}}
 document.documentElement.style.setProperty("--lyr",prefs.font+"rem");
@@ -119,7 +119,7 @@ async function initStore(){
 const VIEWS=["ladicka","akordy","pisnicky","cviceni","pokrok"];let view="ladicka";
 function route(){
   const h=location.hash.slice(1);const nv=VIEWS.includes(h)?h:"ladicka";
-  if(nv!==view){if(view==="ladicka") stopMic();if(view==="cviceni") stopPractice();if(view==="pisnicky"){stopScroll();releaseWake()}}
+  if(nv!==view){if(view==="ladicka") stopMic();if(view==="cviceni") stopPractice();if(view==="pisnicky"){stopPlay();stopScroll();releaseWake()}}
   view=nv;VIEWS.forEach(v=>$("v-"+v).hidden=v!==view);
   document.querySelectorAll("nav.tabs a").forEach(a=>{if(a.dataset.v===view) a.setAttribute("aria-current","page");else a.removeAttribute("aria-current")});
   render();
@@ -246,6 +246,7 @@ function renderChords(){
 let sel=null,editing=null,trans=0,capo=0,confirmDel=false,sq="";
 function songs(){return [...docs.entries()].filter(([,v])=>v&&v.kind==="song").map(([k,v])=>({id:k,...v})).sort((a,b)=>(b.created||0)-(a.created||0))}
 function renderLyrics(text,st){
+  let k=0;
   return (text||"").split("\n").map(line=>{
     const h=/^\s*\{(.+)\}\s*$/.exec(line);if(h) return `<div class="line head">${esc(h[1])}</div>`;
     if(!line.trim()) return `<div class="line nochords">&nbsp;</div>`;
@@ -254,7 +255,7 @@ function renderLyrics(text,st){
     for(let i=1;i<parts.length;i+=2){const raw=parts[i].trim();
       if(!M.isChord(raw)){html+=`<span class="seg"><span class="ch"></span><span class="ly">[${esc(raw)}]${esc(parts[i+1]||"")}</span></span>`;continue}
       const c=M.transpose(raw,st);
-      html+=`<span class="seg"><span class="ch" data-chord="${esc(c)}" role="button" tabindex="0">${esc(c)}</span><span class="ly">${esc(parts[i+1]||" ")}</span></span>`}
+      html+=`<span class="seg"><span class="ch" data-chord="${esc(c)}" data-idx="${k++}" role="button" tabindex="0">${esc(c)}</span><span class="ly">${esc(parts[i+1]||" ")}</span></span>`}
     return `<div class="line${has?"":" nochords"}">${html}</div>`}).join("");
 }
 function songCost(chords,shift){return chords.reduce((s,c)=>{const n=M.transpose(c,shift),ch=M.getChord(n),st=chordStat(ch&&M.DICT[n]?n:n);
@@ -267,7 +268,7 @@ function bestCapo(s){
   const shapes=[...new Set(orig.map(c=>M.transpose(c,keyShift-best.k)))];
   return {k:best.k,shapes};
 }
-function openSong(id){sel=id;editing=null;confirmDel=false;trans=0;const s=docs.get(id);capo=+(s&&s.capo)||0;stopScroll();
+function openSong(id){stopPlay();sel=id;editing=null;confirmDel=false;trans=0;const s=docs.get(id);capo=+(s&&s.capo)||0;stopScroll();
   $("songsWrap").classList.add("reading");render();requestWake();window.scrollTo(0,0)}
 function renderSongs(){
   const all=songs(),list=sq?all.filter(s=>(s.title+" "+s.artist).toLowerCase().includes(sq.toLowerCase())):all;
@@ -288,7 +289,7 @@ function renderSongs(){
       <button class="btn small ghost" type="button" data-edit>Upravit</button></div></div>
     <div class="row">${s.tidal?`<a class="btn small primary" href="${esc(s.tidal)}" target="_blank" rel="noopener">▶ Poslechnout na Tidalu</a><button class="btn small ghost" type="button" data-tidal-set>Změnit odkaz</button>`
       :`<a class="btn small" href="${esc(tidalSearch(s))}" target="_blank" rel="noopener">Najít na Tidalu</a><button class="btn small ghost" type="button" data-tidal-set>Vložit odkaz z Tidalu</button>`}</div>
-    <div class="row"><button class="btn small" type="button" data-tempo>${s.bpm?`♩ ${Math.round(s.bpm)} BPM`:"♩ Zjistit tempo"}</button>${s.bpm?`<button class="btn small ghost" type="button" data-tempo-play>Hrát s metronomem</button>`:""}</div>
+    <div class="row"><button class="btn small" type="button" data-tempo>${s.bpm?`♩ ${Math.round(s.bpm)} BPM`:"♩ Zjistit tempo"}</button><button class="btn small primary" type="button" data-play-song>${pl&&pl.id===sel?"■ Zastavit hraní":"▶ Hrát s písničkou"}</button></div>
     <div class="toolbar">
       <div class="grp" aria-label="Tónina"><button type="button" data-tr="-1" aria-label="O půltón níž">−</button><span>tónina ${trans?(trans>0?"+":"")+trans:"původní"}</span><button type="button" data-tr="1" aria-label="O půltón výš">+</button></div>
       <div class="grp" aria-label="Kapodastr"><button type="button" data-capo="-1" aria-label="Kapodastr níž">−</button><span>kapo ${capo||"bez"}</span><button type="button" data-capo="1" aria-label="Kapodastr výš">+</button></div>
@@ -300,7 +301,7 @@ function renderSongs(){
     <div class="lyrics" id="lyrics">${renderLyrics(s.text,shift)}</div>
     ${s.source?`<p class="muted small-t">Zdroj: <a href="${esc(s.source)}" target="_blank" rel="noopener" style="color:inherit">${esc(s.source.replace(/^https?:\/\//,"").slice(0,60))}</a></p>`:""}
     <div class="row"><button class="btn small ghost danger" type="button" data-del>${confirmDel?"Opravdu smazat? Klepni znovu":"Smazat písničku"}</button></div></article>`;
-  fab(true);
+  if(pl&&pl.id===sel){pl.seq=seqOf(s,shift);fab(false);paintPlay(pl.cur,false)}else fab(true);
 }
 function editor(s){return `<form class="sheet" id="songForm" style="gap:12px"><h3>${editing==="new"?"Nová písnička":"Upravit písničku"}</h3>
   <div class="fields"><label for="fTitle">Název<input id="fTitle" required value="${esc(s.title)}"></label>
@@ -327,19 +328,19 @@ $("importSong").onclick=()=>importSheet();
 $("v-pisnicky").addEventListener("click",e=>{
   const t=e.target;
   const it=t.closest("[data-song]");if(it){openSong(it.dataset.song);return}
-  if(t.closest("[data-back]")){sel=null;stopScroll();releaseWake();$("songsWrap").classList.remove("reading");render();return}
+  if(pl){const ci=t.closest(".lyrics .ch[data-idx]");if(ci){e.stopPropagation();jumpPlay(+ci.dataset.idx);return}}
+  if(t.closest("[data-play-song]")){pl?stopPlay():startPlay();render();return}
+  if(t.closest("[data-back]")){stopPlay();sel=null;stopScroll();releaseWake();$("songsWrap").classList.remove("reading");render();return}
   if(t.closest("[data-cancel]")){editing=null;if(!sel) $("songsWrap").classList.remove("reading");render();return}
-  if(t.closest("[data-edit]")){editing=sel;stopScroll();render();return}
+  if(t.closest("[data-edit]")){stopPlay();editing=sel;stopScroll();render();return}
   if(t.closest("[data-tidal-set]")){tidalSheet(sel);return}
   if(t.closest("[data-tempo]")){tempoSheet({songId:sel});return}
-  if(t.closest("[data-tempo-play]")){const s=docs.get(sel);prefs.bpm=Math.round(s.bpm);const ch=[...new Set(M.chordsIn(s.text).map(c=>M.transpose(c,trans+(+s.capo||0)-capo)))].slice(0,6);
-    if(ch.length) prefs.prog=ch.join(" ");savePrefs();stopMetro();pmode="metro";location.hash="#cviceni";return}
   const tr=t.closest("[data-tr]");if(tr){trans=Math.max(-11,Math.min(11,trans+ +tr.dataset.tr));render();return}
   const cp=t.closest("[data-capo]");if(cp){capo=Math.max(0,Math.min(9,capo+ +cp.dataset.capo));render();return}
   const cs=t.closest("[data-capo-set]");if(cs){capo=+cs.dataset.capoSet;render();toast(`Kapodastr na ${capo}. pražec`);return}
   const fo=t.closest("[data-font]");if(fo){prefs.font=Math.max(0.85,Math.min(1.6,+(prefs.font+0.1*+fo.dataset.font).toFixed(2)));savePrefs();document.documentElement.style.setProperty("--lyr",prefs.font+"rem");return}
   if(t.closest("[data-status]")){const s=docs.get(sel);put(sel,{...s,status:s.status==="umim"?"ucim":"umim"});logActivity();return}
-  if(t.closest("[data-del]")){if(confirmDel){confirmDel=false;del(sel);sel=null;$("songsWrap").classList.remove("reading");toast("Písnička smazaná")}else{confirmDel=true;render();setTimeout(()=>{if(confirmDel){confirmDel=false;render()}},4000)}}
+  if(t.closest("[data-del]")){if(confirmDel){confirmDel=false;stopPlay();del(sel);sel=null;$("songsWrap").classList.remove("reading");toast("Písnička smazaná")}else{confirmDel=true;render();setTimeout(()=>{if(confirmDel){confirmDel=false;render()}},4000)}}
 });
 
 /* autoscroll */
@@ -533,7 +534,7 @@ function startMetro(){
   const draw=()=>{if(!met) return;const now=a.currentTime;let ev=null;while(met.q.length&&met.q[0].t<=now) ev=met.q.shift();
     if(ev){document.querySelectorAll(".pattern div").forEach((d,i)=>d.classList.toggle("on",i===ev.s));
       document.querySelectorAll(".beats i").forEach((d,i)=>d.classList.toggle("on",i===Math.floor(ev.s/2)));
-      const prog=progList();if(prog.length&&$("mCur")){$("mCur").textContent=prog[ev.bar%prog.length];$("mNext").textContent="další "+prog[(ev.bar+1)%prog.length]}}
+      const prog=progList();if(prog.length&&$("mCur")){const cn=prog[ev.bar%prog.length];if($("mCur").textContent!==cn){$("mCur").textContent=cn;$("mDg").innerHTML=diagram(M.getChord(cn),{mini:1})}$("mNext").textContent="další "+prog[(ev.bar+1)%prog.length]}}
     const t=performance.now();practiceSec((t-met.last)/1000);met.last=t;met.raf=requestAnimationFrame(draw)};
   met.raf=requestAnimationFrame(draw);
 }
@@ -550,7 +551,8 @@ function renderMetro(P){
     <div class="pattern" style="--n:${p.slots.length}">${[...p.slots].map((c,i)=>`<div><b>${c==="D"?"↓":c==="U"?"↑":""}</b>${i%2?"a":i/2+1}</div>`).join("")}</div>
     <div class="panel"><label class="inline" for="mPlay"><input type="checkbox" id="mPlay"> Hrát se mnou akordy (jeden akord na takt)</label>
       <label for="mProg">Sled akordů<input id="mProg" value="${esc(prefs.prog)}" placeholder="G D Em C"></label>
-      <div class="row between"><span style="font-family:var(--f-display);font-size:2.2rem;font-weight:800" id="mCur">${esc(prog[0]||"")}</span><span class="muted" id="mNext">${prog[1]?"další "+esc(prog[1]):""}</span></div></div>
+      <div class="row between"><div style="display:flex;align-items:center;gap:12px"><div class="dg" id="mDg" style="width:86px">${prog[0]?diagram(M.getChord(prog[0]),{mini:1}):""}</div><span style="font-family:var(--f-display);font-size:2.2rem;font-weight:800" id="mCur">${esc(prog[0]||"")}</span></div><span class="muted" id="mNext">${prog[1]?"další "+esc(prog[1]):""}</span></div></div>
+    <p class="muted small-t" style="text-align:center">Chceš k tomu text a zpívat? Otevři písničku a klepni na ▶ Hrát s písničkou.</p>
     <button class="btn small ghost" type="button" id="mDetect" style="justify-self:center">Nevíš tempo? Zjisti ho poslechem písničky</button>
     <button class="btn primary wide" type="button" id="mGo">${met?"Zastavit":"Spustit"}</button></div>`;
   const setB=v=>{prefs.bpm=Math.max(40,Math.min(200,Math.round(v)));savePrefs();$("mBpm").textContent=prefs.bpm;$("mRange").value=prefs.bpm};
@@ -558,7 +560,7 @@ function renderMetro(P){
   P.querySelectorAll("[data-bpm]").forEach(b=>b.onclick=()=>setB(prefs.bpm+ +b.dataset.bpm));
   $("mTap").onclick=()=>{const t=performance.now();taps=taps.filter(x=>t-x<2500);taps.push(t);if(taps.length>=3){const iv=(taps[taps.length-1]-taps[0])/(taps.length-1);setB(60000/iv)}};
   $("mPat").onchange=e=>{prefs.pattern=e.target.value;savePrefs();const r=!!met;stopMetro();render();if(r){startMetro();$("mGo").textContent="Zastavit"}};
-  $("mProg").onchange=e=>{prefs.prog=e.target.value;savePrefs();const l=progList();$("mCur").textContent=l[0]||"";$("mNext").textContent=l[1]?"další "+l[1]:""};
+  $("mProg").onchange=e=>{prefs.prog=e.target.value;savePrefs();const l=progList();$("mCur").textContent=l[0]||"";$("mDg").innerHTML=l[0]?diagram(M.getChord(l[0]),{mini:1}):"";$("mNext").textContent=l[1]?"další "+l[1]:""};
   $("mDetect").onclick=()=>tempoSheet({bpm:prefs.bpm,onApply:v=>{setB(v);toast(`Metronom nastavený na ${Math.round(v)} BPM`)}});
   $("mGo").onclick=()=>{if(met){stopMetro();flushSec()}else{startMetro();$("mGo").textContent="Zastavit"}};
 }
@@ -619,6 +621,98 @@ function render(){
   if(view!=="pisnicky"&&$("scrollFab")) $("scrollFab").hidden=true;
 }
 
+
+
+/* ---------- hraní s písničkou ---------- */
+let pl=null;
+function seqOf(s,shift){return [...(s.text||"").matchAll(/\[([^\]]+)\]/g)].map(m=>m[1].trim()).filter(M.isChord).map(c=>M.transpose(c,shift))}
+const slotLen=()=>pat().slots.length*prefs.barsPerChord;
+function plIdx(slot){return pl.base+Math.floor(Math.max(0,slot)/slotLen())}
+function startPlay(){
+  const s=docs.get(sel);if(!s) return;const shift=trans+(+s.capo||0)-capo,seq=seqOf(s,shift);
+  if(!seq.length){toast("Tahle písnička nemá žádné akordy");return}
+  stopScroll();stopMetro();
+  const a=ctx(),spb=pat().slots.length;
+  pl={id:sel,seq,base:0,slot:-spb,next:a.currentTime+0.15,q:[],cur:-1,bpm:Math.round(s.bpm||prefs.bpm),songBpm:s.bpm?Math.round(s.bpm):null,last:performance.now(),endAt:null};
+  if(!s.bpm) toast(`Tempo písničky neznám, hraju ${pl.bpm}. Uprav ho dole nebo ho zjisti.`);
+  pl.timer=setInterval(schedPlay,25);pl.raf=requestAnimationFrame(drawPlay);
+  document.body.classList.add("playing");requestWake();renderDock();paintPlay(0,true);
+}
+function stopPlay(){
+  if(!pl) return;clearInterval(pl.timer);cancelAnimationFrame(pl.raf);pl=null;
+  document.body.classList.remove("playing");document.querySelectorAll(".lyrics .ch.now,.lyrics .line.cur").forEach(el=>el.classList.remove("now","cur"));
+  const d=$("playDock");if(d) d.hidden=true;flushSec();
+  const b=document.querySelector("[data-play-song]");if(b) b.textContent="▶ Hrát s písničkou";
+}
+function schedPlay(){
+  const a=ac,p=pat(),spb=p.slots.length;
+  while(pl&&pl.next<a.currentTime+0.12&&pl.endAt==null){
+    const s=pl.slot,inBar=((s%spb)+spb)%spb,idx=plIdx(s);
+    if(idx>=pl.seq.length){pl.endAt=pl.next;break}
+    if(inBar%2===0) click(pl.next,inBar===0);
+    if(s>=0&&prefs.playStrum&&p.slots[inBar]!=="-") strumAt(M.getChord(pl.seq[idx]),pl.next,p.slots[inBar],0.28);
+    pl.q.push({t:pl.next,s,inBar,idx});pl.next+=60/pl.bpm/2;pl.slot++;
+  }
+}
+function drawPlay(){
+  if(!pl) return;const now=ac.currentTime;let ev=null;while(pl.q.length&&pl.q[0].t<=now) ev=pl.q.shift();
+  if(ev){
+    document.querySelectorAll("#playDock .beats i").forEach((d,i)=>d.classList.toggle("on",i===Math.floor(ev.inBar/2)));
+    const cd=$("pdCount");
+    if(ev.s<0){if(cd) cd.textContent=`Připrav se… ${pat().beats-Math.floor(ev.inBar/2)}`}
+    else{if(cd&&cd.textContent) cd.textContent="";if(ev.idx!==pl.cur) paintPlay(ev.idx,true)}
+  }
+  if(pl.endAt!=null&&now>pl.endAt){stopPlay();toast("Konec písničky. Pěkně!");logActivity();render();return}
+  const t=performance.now();practiceSec((t-pl.last)/1000);pl.last=t;pl.raf=requestAnimationFrame(drawPlay);
+}
+function paintPlay(idx,scroll){
+  if(!pl) return;pl.cur=idx;
+  document.querySelectorAll(".lyrics .ch.now,.lyrics .line.cur").forEach(el=>el.classList.remove("now","cur"));
+  const el=document.querySelector(`.lyrics .ch[data-idx="${idx}"]`);
+  if(el){el.classList.add("now");const line=el.closest(".line");if(line) line.classList.add("cur");
+    if(scroll){const r=(line||el).getBoundingClientRect(),dock=$("playDock"),dh=dock&&!dock.hidden?dock.getBoundingClientRect().height:0,vis=window.innerHeight-dh;
+      if(r.top<80||r.bottom>vis*0.62){const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+        window.scrollTo({top:window.scrollY+r.top-Math.max(80,vis*0.25),behavior:reduce?"auto":"smooth"})}}}
+  const name=pl.seq[idx],next=pl.seq[idx+1];
+  if($("pdName")){$("pdName").textContent=name||"";$("pdDg").innerHTML=diagram(M.getChord(name),{mini:1});
+    $("pdNext").innerHTML=next?`další <b>${esc(next)}</b>`:"poslední akord"}
+}
+function jumpPlay(idx){
+  if(!pl) return;const cur=pl.q.length?pl.q[0].s:pl.slot;pl.base=idx-Math.floor(Math.max(0,cur)/slotLen());
+  pl.q.forEach(ev=>ev.idx=plIdx(ev.s));paintPlay(idx,false);toast(`Pokračuju od ${pl.seq[idx]}`);
+}
+function setBarsPerChord(v){
+  if(pl){const cur=pl.q.length?pl.q[0].s:pl.slot,ci=pl.cur<0?0:pl.cur;prefs.barsPerChord=v;pl.base=ci-Math.floor(Math.max(0,cur)/slotLen())}
+  else prefs.barsPerChord=v;savePrefs();renderDock();
+}
+function renderDock(){
+  let d=$("playDock");
+  if(!d){d=document.createElement("div");d.id="playDock";d.className="play-dock";d.setAttribute("role","region");d.setAttribute("aria-label","Hraní s písničkou");document.body.appendChild(d);
+    d.addEventListener("click",e=>{const t=e.target;if(!pl) return;
+      if(t.closest("[data-pd-stop]")){stopPlay();render();return}
+      const b=t.closest("[data-pd-bpm]");if(b){pl.bpm=Math.max(30,Math.min(240,pl.bpm+ +b.dataset.pdBpm));renderDock();return}
+      const bc=t.closest("[data-pd-bars]");if(bc){setBarsPerChord(+bc.dataset.pdBars);return}
+      if(t.closest("[data-pd-dg]")){strum(M.getChord(pl.seq[pl.cur]));return}});
+    d.addEventListener("change",e=>{if(!pl) return;if(e.target.id==="pdStrum"){prefs.playStrum=e.target.checked;savePrefs()}
+      if(e.target.id==="pdPat"){const ci=pl.cur<0?0:pl.cur;prefs.pattern=e.target.value;savePrefs();pl.slot=0;pl.base=ci;pl.q=[];pl.next=ac.currentTime+0.1;renderDock()}});
+  }
+  if(!pl){d.hidden=true;return}
+  const p=pat(),wasOpen=!!d.querySelector(".pd-opts[open]");d.hidden=false;
+  d.innerHTML=`<div class="pd-main">
+    <div class="pd-ch" data-pd-dg role="button" tabindex="0" aria-label="Přehrát aktuální akord"><div class="dg" id="pdDg"></div><b id="pdName"></b></div>
+    <div class="pd-mid">
+      <div class="pd-tempo"><button type="button" data-pd-bpm="-5" aria-label="Pomaleji o 5">−5</button><span><b>${pl.bpm}</b> BPM${pl.songBpm&&pl.songBpm!==pl.bpm?` <small>(píseň ${pl.songBpm})</small>`:""}</span><button type="button" data-pd-bpm="5" aria-label="Rychleji o 5">+5</button></div>
+      <div class="beats">${Array.from({length:p.beats},(_,i)=>`<i class="${i===0?"acc":""}"></i>`).join("")}</div>
+      <div class="pd-next" id="pdNext"></div><div class="pd-count" id="pdCount"></div>
+    </div>
+    <button class="pd-stop" type="button" data-pd-stop aria-label="Zastavit">■</button></div>
+    <details class="pd-opts"${wasOpen?" open":""}><summary>Nastavení</summary><div class="pd-opt-in">
+      <div class="row"><span class="small-t muted">Akord trvá</span>${[[0.5,"½ taktu"],[1,"1 takt"],[2,"2 takty"],[4,"4 takty"]].map(([v,l])=>`<button type="button" class="chip" data-pd-bars="${v}" aria-pressed="${prefs.barsPerChord===v}">${l}</button>`).join("")}</div>
+      <div class="row"><label class="inline" for="pdStrum"><input type="checkbox" id="pdStrum"${prefs.playStrum?" checked":""}> Doprovodná kytara</label>
+        <select id="pdPat" aria-label="Rytmus">${PATTERNS.map(x=>`<option value="${x.id}"${x.id===p.id?" selected":""}>${x.name}</option>`).join("")}</select></div>
+      <p class="small-t muted">Když se rozejdeš s aplikací, klepni v textu na akord, který právě hraješ.</p></div></details>`;
+  paintPlay(pl.cur<0?0:pl.cur,false);
+}
 
 /* ---------- tempo ---------- */
 let tp=null;
